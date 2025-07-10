@@ -764,5 +764,5 @@ def Q_player(is_training=False, dqn_path=""):
     
 if __name__ == "__main__":
     #Q_player(is_training=True)
-    Q_player(is_training=False, dqn_path="tetris_dqn_A.pth")
+    Q_player(is_training=False, dqn_path="tetris_dqn_final.pth")
     
