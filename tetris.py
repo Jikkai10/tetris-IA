@@ -4,9 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from collections import deque
-import math
-import copy
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 colors = [
@@ -104,21 +102,6 @@ class Tetris:
 
         self.score += lines ** 2
         
-    def break_lines_shadow(self,field,height,width):
-        lines = 0
-        reward = 0
-        for i in range(1, height):
-            zeros = 0
-            for j in range(width):
-                if field[i][j] == 0:
-                    zeros += 1
-            if zeros == 0:
-                lines += 1
-                for i1 in range(i, 1, -1):
-                    for j in range(width):
-                        field[i1][j] = field[i1 - 1][j]
-        reward += (lines+1) ** 2 
-        return reward
         
 
     def go_space(self):
@@ -145,8 +128,7 @@ class Tetris:
         count -= 1
         
         shadow = [figure.y,figure.x]
-        #reward = self.freeze_shadow(figure,field,self.height,self.width)
-        #reward += self.calculate_reward(field,last_field)
+        
         
         return [0, shadow, 0]
         
@@ -169,8 +151,7 @@ class Tetris:
         return new
     
     def calculate_reward(self, new_table, last_table):
-        # new_table = self.field
-        # last_table = self.last_field
+        
         new_table = (new_table > 0).int()
         last_table = (last_table > 0).int()
         height, width = new_table.shape
@@ -201,10 +182,10 @@ class Tetris:
             for row in range(20-max_height,20):
                 for col in range(width):
                     if new_table[row,col] == 0 and torch.any(new_table[:row, col] > 0):
-                        #print(f"Row: {row}, Col: {col}, Value: {new_table[row+1:, col]}")
+                        
                         holes += 1
                     
-                #line += torch.sum(new_table[row,:])**2
+              
               
         
         if last_max_height > 0:
@@ -212,15 +193,9 @@ class Tetris:
                 for col in range(width):
                     if last_table[row,col] == 0 and torch.any(last_table[:row, col] > 0):
                         last_holes += 1
-                #last_line += torch.sum(last_table[row,:])**2
+                
         
-            
-        
-        
-        # sum_height = torch.sum(column_heights**2)
-        # last_sum_height = torch.sum(last_column_heights**2)
-        
-        # Rugosidade: soma da diferença de altura entre colunas vizinhas
+       
         bumpiness = torch.sum(torch.abs(torch.diff(column_heights)))
         last_bumpiness = torch.sum(torch.abs(torch.diff(last_column_heights)))
     
@@ -228,17 +203,15 @@ class Tetris:
         const_holes = torch.tensor((last_holes - holes) / 5.0)
         if holes - last_holes > 0 and holes - last_holes <= 2:
             const_holes = torch.tensor(-0.5)
-        #const_height = (last_sum_height-sum_height)/200
-        #const_line = (line-last_line)/60
+        
         const_bump = (last_bumpiness-bumpiness)/8
 
         const_holes = torch.clip(const_holes, -1, 1)
-        #const_height = torch.clip(const_height, -1, 0)
-        #const_line = torch.clip(const_line, 0, 1)
+        
         const_bump = torch.clip(const_bump, -1, 1)
 
 
-        reward = 0.8*const_holes + 0.2*const_bump #+ 0.4*const_height + 0.4*const_line
+        reward = 0.8*const_holes + 0.2*const_bump 
 
         return float(reward)
 
@@ -253,18 +226,7 @@ class Tetris:
             self.reward = -5
             self.state = "gameover"
             
-    def freeze_shadow(self, figure, field, height, width):
-        for i in range(4):
-            for j in range(4):
-                if i * 4 + j in figure.image():
-                    field[i + figure.y][j + figure.x] = figure.color
-        
-        reward = self.break_lines_shadow(field,height,width)
-        figure = Figure(3, 0, self.next_figure)
-        if self.intersects(figure, field, height, width):
-            reward = -5
-            
-        return reward
+    
     def go_side(self, dx):
         old_x = self.figure.x
         self.figure.x += dx
@@ -364,8 +326,7 @@ def train_step(dqn, target, optimizer, buffer, frame_idx, batch_size, gamma=GAMM
 
     td_errors = target_q - q_values
     loss = (weights * td_errors.pow(2)).mean()
-    #if frame_idx % 1000 == 0:
-    #    print(f"Loss: {loss.item()}")
+    
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -383,29 +344,20 @@ class DQN(nn.Module):
         self.cnn = nn.Sequential(
             nn.Conv2d(4, 16, kernel_size=3, padding=1),  
             nn.ReLU(),
-            #nn.MaxPool2d(2,2),
+            
             nn.Conv2d(16, 32, kernel_size=3, padding=1), 
             nn.ReLU(),
             nn.MaxPool2d(2,2),
             nn.Conv2d(32, 32, kernel_size=3, padding=1), 
             nn.ReLU(),
-            # 
-            # nn.Conv2d(64, 64, kernel_size=3, padding=1), 
-            # nn.ReLU(),
-            # nn.Conv2d(128, 128, kernel_size=3, padding=1), 
-            # nn.ReLU(),
+            
             nn.Flatten()
         )
 
         
         
 
-        # Extra info (MLP com figura + rotação + alturas)
-        # self.extra = nn.Sequential(
-        #     nn.Linear(extra_dim, 64),
-        #     nn.ReLU()
-            
-        # )
+      
 
         # Cálculo do tamanho de saída
         dummy_input = torch.zeros(1, 4, 20, 10)
@@ -418,8 +370,7 @@ class DQN(nn.Module):
         self.combined = nn.Sequential(
             nn.Linear(total_features, 256),
             nn.ReLU()
-            # nn.Linear(256, 256),
-            # nn.ReLU()
+          
         )
 
         # Dueling DQN
@@ -429,8 +380,7 @@ class DQN(nn.Module):
         )
         self.advantage_stream = nn.Sequential(
             
-            # nn.Linear(256, 256),
-            # nn.ReLU(),
+         
             nn.Linear(256, action_dim)
         )
 
@@ -439,9 +389,7 @@ class DQN(nn.Module):
         cnn = self.cnn(image)
         
 
-        #extra_out = self.extra(extra_input)
-
-        #x = torch.cat((cnn, extra_out), dim=1)
+      
         x = self.combined(cnn)
 
         value = self.value_stream(x)
@@ -450,14 +398,14 @@ class DQN(nn.Module):
         return value + advantage - advantage.mean(dim=1, keepdim=True)
 
 class train:
-    def __init__(self, game):
+    def __init__(self, game, dqn, mode=0):
         self.game = game
         self.episodes = 10000
         self.done = False
         self.epsilon = EPSILON
         state_dim = 7 + 7 + 4
-        action_dim = 4  
-        self.dqn = DQN(state_dim, action_dim).to(device)
+        action_dim = 4
+        self.dqn = dqn
         self.target = DQN(state_dim, action_dim).to(device)
         self.target.load_state_dict(self.dqn.state_dict())
         self.target.eval()
@@ -470,6 +418,7 @@ class train:
         self.down_count = 0
         self.figure_onehot = torch.eye(7, device=device)
         self.rotation_onehot = torch.eye(4, device=device)
+        self.mode = mode
 
     def init_game(self):
         # reinicia tudo
@@ -507,18 +456,7 @@ class train:
 
         self.state = torch.stack([field, piece, shadow, next]).to(device)
 
-        # column_heights = 20 - torch.argmax(field, axis=0)
-        # column_heights[field.sum(dim=0) == 0] = 0
-        # figure = self.figure_onehot[self.game.figure.type]
-        # next_figure = self.figure_onehot[self.game.next_figure]
-        # rotation = self.rotation_onehot[self.game.figure.rotation]
-
-        # self.extra = torch.cat([
-        #     figure,
-        #     next_figure,
-        #     rotation
-        # ], dim=0)
-
+        
         self.count += 1
 
     def make_action(self, action):
@@ -563,28 +501,19 @@ class train:
 
         new_state = torch.stack([field, piece, shadow, next]).to(device)
 
-        # column_heights = 20 - torch.argmax(field, axis=0)
-        # column_heights[field.sum(dim=0) == 0] = 0
-        # figure = self.figure_onehot[game.figure.type]
-        # next_figure = self.figure_onehot[game.next_figure]
-        # rotation = self.rotation_onehot[game.figure.rotation]
-        # new_extra = torch.cat([
-        #     figure,
-        #     next_figure,
-        #     rotation
-        # ], dim=0)
+        
 
         done = game.state == "gameover"
 
         self.buffer.push((self.state, action, reward, new_state, done))
 
         self.state = new_state
-        #self.extra = new_extra
+       
         self.done = done
 
     def step(self):
-        # eps-greedy
-        if np.random.uniform() < self.epsilon or self.counter < 10000:
+       
+        if (np.random.uniform() < self.epsilon or self.counter < 10000) and self.mode == 0:
             action = np.random.choice(range(4))
         else:
             with torch.no_grad():
@@ -597,7 +526,7 @@ class train:
         if self.counter > 10000:
             train_step(self.dqn, self.target, self.optimizer, self.buffer, self.counter, BATCH_SIZE)
 
-        if self.counter < 1000000:
+        if self.counter < 500000:
             self.epsilon = max(MIN_EPSILON, self.epsilon * np.exp(-1.0 / EPSILON_DECAY))
             
         else:
@@ -615,19 +544,24 @@ class train:
             self.sum_reward += self.game.score
 
 
-def Q_trainer(game):
-    trainer = train(game)
+def Q_trainer(game, dqn, mode=0):
+    trainer = train(game, dqn, mode)
     trainer.train_loop()
-    torch.save(trainer.dqn.state_dict(), "tetris_dqn_final3.pth")
+    torch.save(trainer.dqn.state_dict(), "tetris_dqn_final.pth")
 
 
 
-def Q_player(is_training=False, dqn_path=""):
+def Q_player(is_training=False, dqn_path=None):
     #torch.random.manual_seed(1) 
     game = Tetris(20, 10)
     
     if is_training:
-        Q_trainer(game)
+        dqn = DQN(7+7+4, 4).to(device)
+        mode = 0
+        if dqn_path:
+            dqn.load_state_dict(torch.load(dqn_path))
+            mode = 1
+        Q_trainer(game,dqn,mode)
         
         return
     
@@ -689,20 +623,10 @@ def Q_player(is_training=False, dqn_path=""):
 
             
             
-        figure = torch.zeros(7).to(device)
-        next_figure = torch.zeros(7).to(device)
-        rotation = torch.zeros(4).to(device)
-        
-        column_heights = 20 - torch.argmax(field[:, :], axis=0)
-        for i in range(10):
-            if torch.sum(field[:,i], axis=0) == 0:
-                column_heights[i] = 0
-        figure[game.figure.type] = 1
-        next_figure[game.next_figure] = 1
-        rotation[game.figure.rotation] = 1     
+            
         
         state = torch.stack([field, piece, shadow,next], axis=0 ).to(device)
-        extra = torch.concatenate((figure, next_figure, rotation)).to(device)
+        
 
         
         with torch.no_grad():
@@ -764,5 +688,6 @@ def Q_player(is_training=False, dqn_path=""):
     
 if __name__ == "__main__":
     #Q_player(is_training=True)
-    Q_player(is_training=False, dqn_path="tetris_dqn_final.pth")
+    #Q_player(is_training=True, dqn_path="tetris_dqn_final.pth")
+    Q_player(is_training=False, dqn_path="tetris_dqn_final2.pth")
     
